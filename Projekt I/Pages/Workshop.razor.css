@@ -1,0 +1,20 @@
+﻿body {
+}
+
+.novel-submit-wrapper{
+    padding-bottom: 5%;
+
+}
+.novel-buttons-wrapper {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-direction: row;
+    padding: 5px;
+}
+
+.mdc-select .mdc-select__anchor {
+    height: 56px !important;
+    display: flex !important;
+    align-items: center !important;
+}

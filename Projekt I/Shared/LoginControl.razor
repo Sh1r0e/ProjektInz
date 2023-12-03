@@ -1,0 +1,71 @@
+﻿@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication;
+@using Microsoft.AspNetCore.Authentication.Cookies;
+@using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.Mvc;
+@inject IHttpContextAccessor _httpContextAccessor
+@inject HttpClient Http
+@inject FirestoreService firestoreService
+@if (userContextService.IsUserAuthenticated)
+{
+    <img src="@userContextService.Avatar" alt="User Avatar" class="avatar">
+
+    <b class="user-info">You are logged in as: @userContextService.GivenName</b>
+    <MatButton Style="background-color:white;" class="ml-md-auto btn btn-primary"
+    @onclick="Logout"
+       target="_top">
+        Logout
+    </MatButton>
+
+}
+else
+{
+    <a class="ml-md-auto btn btn-primary"
+    @onclick="Login"
+       target="_top">
+        Login
+    </a>
+}
+@code {
+
+
+    [Inject] UserContextService userContextService { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        try
+        {
+
+            // Set the user to determine if they are logged in
+            var user = userContextService.GetUser();
+            if (userContextService.IsUserAuthenticated)
+            {
+
+                await firestoreService.StoreUserData(new Data.Models.User
+                {
+                    Id = user.FindFirstValue(ClaimTypes.NameIdentifier),
+                    Username = user.FindFirstValue(ClaimTypes.Name)
+                });
+            }
+          
+        }
+        catch(Exception ex)
+        {
+            
+        }
+    }
+
+    private async Task Login()
+    {
+        // Redirect to Google authentication
+        NavigationManager.NavigateTo("auth/login", true);
+
+    }
+
+    private async Task Logout()
+    {
+        // Redirect to Google authentication
+        NavigationManager.NavigateTo("auth/logout", true);
+    }
+}

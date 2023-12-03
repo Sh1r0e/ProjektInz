@@ -1,0 +1,24 @@
+﻿.app-bar {
+    position: relative; /* Create a stacking context */
+}
+
+    .app-bar .mat-button.menu-button {
+        color: white;
+    }
+
+    /* Style for the menu container */
+    .app-bar .custom-menu {
+        top: 6%;
+        background-color: white;
+    }
+
+        /* Style for the menu items (optional) */
+        .app-bar .custom-menu .mat-list-item {
+            color: lightslategrey;
+        }
+@media screen and (max-width: 768px) {
+    .mat-nav-submenu {
+        width: 100%; /* Optionally, make it full width */
+        margin-top: 1rem; /* Adjust the spacing */
+    }
+}

@@ -1,0 +1,20 @@
+﻿@page "/home"
+
+<PageTitle>Index</PageTitle>
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app.
+
+<SurveyPrompt Title="How is Blazor working for you?" />
+
+<AuthorizeView>
+    <Authorized>
+        @foreach (var item in context.User.Claims)
+        {
+            <h2>@item.Type @item.Value</h2>
+        }
+        <img src="@context.User.Claims.Where(s=> s.Type == "picture").FirstOrDefault().Value" />
+    </Authorized>
+</AuthorizeView>
+

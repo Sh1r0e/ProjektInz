@@ -1,0 +1,20 @@
+.page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: row;
+}
+
+.main-content {
+    display: flex;
+    flex: auto;
+
+}
+
+.content {
+    padding-top: 3%;
+    width: 100%; 
+    max-width: 100%; 
+
+}
+
+

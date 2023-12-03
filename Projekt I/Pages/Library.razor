@@ -1,0 +1,195 @@
+﻿@page "/library"
+@using Projekt_I.Data.Models;
+@inject NavigationManager NavigationManager
+@inject FirestoreService FirestoreService
+@inject UserContextService UserContextService
+@inject IMatDialogService MatDialogService
+
+
+<div class="mat-layout-grid" style="overflow:auto">
+    <div class="mat-layout-grid-inner">
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-6">
+            <div class="mat-layout-grid-inner">
+                <div class="mat-layout-grid-cell mat-layout-grid-cell-span-6">
+                    <h3>Your favorites:</h3>
+                    @if (favorites != null)
+                    {
+                        foreach (var fav in favorites)
+                        {
+                            <div class="text-center">
+                                <MatCard class="demo-mat-card asd" Style="max-width: 500px;max-height: 500px; margin: 1em">  
+                                    <MatCardContent>
+                                        <MatCardMedia Wide="true" ImageUrl="https://placehold.co/600x400"></MatCardMedia>
+                                        <div class="demo-mat-card-content">
+                                            <MatHeadline6 class="demo-mat-card-clean-margin">
+                                                @fav.Title
+                                            </MatHeadline6>
+                                            <MatSubtitle2 class="demo-mat-card-clean-margin">
+                                                by @fav.AuthorUsername
+                                            </MatSubtitle2>
+                                        </div>
+
+                                        <MatBody2 class="demo-mat-card-content demo-mat-card-clean-margin">
+                                            @fav.Description
+                                        </MatBody2>
+                                    </MatCardContent>
+                                    <MatCardActions>
+                                        <MatCardActionButtons>
+                                            <MatButton OnClick="@(e => NavigateToNovelPage(fav.Id))">Read</MatButton>
+                                            <MatButton Icon="clear" OnClick="@(e => RemoveNovelFromFavorites(fav.Id))">Remove</MatButton>
+                                        </MatCardActionButtons>
+                                    </MatCardActions>
+                                </MatCard>
+
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="mat-layout-grid-cell mat-layout-grid-cell-span-6">
+                    <h3>Planning to read:</h3>
+                    @if (planToRead != null)
+                    {
+                        foreach (var plan in planToRead)
+                        {
+                            <div class="text-center">
+                                <MatCard class="demo-mat-card" Style="max-width:500px; max-height:500px; Margin: 1em">
+                                    <MatCardContent>
+                                        <MatCardMedia Wide="true" ImageUrl="https://placehold.co/600x400"></MatCardMedia>
+                                        <div class="demo-mat-card-content">
+                                            <MatHeadline6 class="demo-mat-card-clean-margin">
+                                                @plan.Title
+                                            </MatHeadline6>
+                                            <MatSubtitle2 class="demo-mat-card-clean-margin">
+                                                by @plan.AuthorUsername
+                                            </MatSubtitle2>
+                                        </div>
+
+                                        <MatBody2 class="demo-mat-card-content demo-mat-card-clean-margin">
+                                            @plan.Description
+                                        </MatBody2>
+                                    </MatCardContent>
+                                    <MatCardActions>
+                                        <MatCardActionButtons>
+                                            <MatButton OnClick="@(e => NavigateToNovelPage(plan.Id))">Read</MatButton>
+                                            <MatButton Icon="clear" OnClick="@(e => RemoveNovelFromPlanToRead(plan.Id))">Remove</MatButton>
+                                        </MatCardActionButtons>
+                                    </MatCardActions>
+                                </MatCard>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-6" style="height:100%">
+
+            <div class="d-flex align-items-center flex-column" style="height: 100%;">
+                <div class="text-center">
+                    <h3>Your bookmarked novel:</h3>
+                    @if (novel != null)
+                    {
+                        <MatCard class="demo-mat-card" Style="max-width:500px; max-height:500px">
+                            <MatCardContent>
+                                <MatCardMedia Wide="true" ImageUrl="https://placehold.co/600x400"></MatCardMedia>
+                                <div class="demo-mat-card-content">
+                                    <MatHeadline6 class="demo-mat-card-clean-margin">
+                                        @novel.Title
+                                    </MatHeadline6>
+                                    <MatSubtitle2 class="demo-mat-card-clean-margin">
+                                        by @novel.AuthorUsername
+                                    </MatSubtitle2>
+                                </div>
+
+                                <MatBody2 class="demo-mat-card-content demo-mat-card-clean-margin">
+                                    @novel.Description
+                                </MatBody2>
+                            </MatCardContent>
+                            <MatCardActions>
+                                <MatCardActionButtons>
+                                    <MatButton OnClick="@(e => NavigateToNovelPage(novel.Id))">Read</MatButton>
+                                    <MatButton OnClick="@(e=> ContinueReading())">Continue reading</MatButton>
+                                </MatCardActionButtons>
+                            </MatCardActions>
+                        </MatCard>
+
+                    }
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+
+
+
+
+
+@code {
+
+    User userData;
+    Data.Models.Library library;
+    Novel novel;
+    List<Volume> volumes;
+    List<Novel> favorites;
+    List<Novel> planToRead;
+
+    private string currentlySelectedNovel;
+    private string userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = UserContextService.GetCurrentUserId();
+        favorites = await FirestoreService.GetFavoriteNovels(userId);
+        planToRead = await FirestoreService.GetPlanToReadNovels(userId);
+        library = await FirestoreService.GetUserLibrary(userId);
+        if (library != null)
+        {
+            var content = await FirestoreService.GetNovel(library.NovelId);
+            novel = content;
+
+        }
+        await base.OnInitializedAsync();
+    }
+
+    private void NavigateToNovelPage(string novelId)
+    {
+        NavigationManager.NavigateTo("/novelview/" + novelId);
+    }
+
+    private async Task ContinueReading()
+    {
+        var novelId = novel.Id;
+        var continueReading = true;
+
+        NavigationManager.NavigateTo($"/novelview/{novelId}?ContinueReading={continueReading}");
+    }
+    private async Task RemoveNovelFromFavorites(string novelId)
+    {
+        var result = await FirestoreService.RemoveNovelFromFavorites(userId, novelId);
+        if (result)
+        {
+            await MatDialogService.AlertAsync("Removed from favourites!");
+            var novelToRemove = favorites.Where(x => x.Id == novelId).FirstOrDefault();
+            favorites.Remove(novelToRemove);
+            this.StateHasChanged();
+            return;
+        }
+        await MatDialogService.AlertAsync("Oops, something went wrong.");
+    }
+
+    private async Task RemoveNovelFromPlanToRead(string novelId)
+    {
+        var result = await FirestoreService.RemoveNovelFromPlanToRead(userId, novelId);
+        if (result)
+        {
+            await MatDialogService.AlertAsync("Removed from plan to read!");
+            var novelToRemove = planToRead.Where(x => x.Id == novelId).FirstOrDefault();
+            planToRead.Remove(novelToRemove);
+            this.StateHasChanged();
+            return;
+        }
+        await MatDialogService.AlertAsync("Oops, something went wrong.");
+    }
+}

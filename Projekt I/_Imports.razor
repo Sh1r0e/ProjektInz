@@ -1,0 +1,18 @@
+﻿@using System.Net.Http
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.JSInterop
+@using MatBlazor
+@using Projekt_I
+@using Projekt_I.Shared
+@using Projekt_I.Services;
+@using Markdig;
+@using Blazorise.Markdown;
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IHttpContextAccessor _httpContextAccessor
+@inject HttpClient Http

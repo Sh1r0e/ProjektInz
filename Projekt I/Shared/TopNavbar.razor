@@ -1,0 +1,66 @@
+﻿@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <Authorized>
+            <MatAppBarContainer Class="app-bar">
+                <MatAppBar Fixed="true">
+                    <MatAppBarRow>
+                        <MatAppBarSection>
+                            <MatButton Style="background-color:white;" Label="Menu" OnClick="@OnClick" RefBack="@buttonForwardRef"></MatButton>
+                            <MatMenu @ref="Menu" TargetForwardRef="@buttonForwardRef" >
+                                <MatList>
+                                    <MatListItem>
+                                        <a href="/"> Home</a>
+                                    </MatListItem>
+                                    <MatListItem>
+                                        <a href="/myaccount"> MyAccount</a>
+                                    </MatListItem>
+                                    <MatListItem>
+                                        <a href="/search"> Search</a>
+                                    </MatListItem>
+                                    <MatListItem>
+                                        <a href="/library"> Library</a>
+                                    </MatListItem>
+                                    <MatListItem>
+                                        <a href="/workshop"> Workshop</a>
+                                    </MatListItem>
+                                </MatList>
+                            </MatMenu>
+                            <MatAppBarTitle>NovelReads - novels in one place</MatAppBarTitle>
+                        </MatAppBarSection>
+                        <MatAppBarSection Align="@MatAppBarSectionAlign.End">
+                            <LoginControl></LoginControl>
+                        </MatAppBarSection>
+                    </MatAppBarRow>
+                </MatAppBar>
+            </MatAppBarContainer>
+        </Authorized>
+        <NotAuthorized>
+            <MatAppBarContainer Class="app-bar">
+                <MatAppBar Fixed="true">
+                    <MatAppBarRow>
+                        <MatAppBarSection>                           
+                            <MatAppBarTitle>NovelReads - novels in one place</MatAppBarTitle>
+                        </MatAppBarSection>
+                        <MatAppBarSection Align="@MatAppBarSectionAlign.End">
+                            <LoginControl></LoginControl>
+                        </MatAppBarSection>
+                    </MatAppBarRow>
+                </MatAppBar>
+            </MatAppBarContainer>
+
+        </NotAuthorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+@code {
+    ForwardRef buttonForwardRef = new ForwardRef();
+    BaseMatMenu Menu;
+
+    public void OnClick(MouseEventArgs e)
+    {
+        this.Menu.OpenAsync();
+    }
+}

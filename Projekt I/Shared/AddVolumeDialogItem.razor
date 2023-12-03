@@ -1,0 +1,66 @@
+﻿@using Projekt_I.Data.Models;
+@inject IMatDialogService MatDialogService
+@inject FirestoreService FirestoreService
+ 
+ 
+<MatDialogTitle style="display: flex; align-items: center;">
+    <div style="flex: 1;">Add Volume</div>
+    <div @onclick="@(_=>CloseDialog())" style="cursor: pointer;">
+        <MatIcon Icon="@MatIconNames.Close"></MatIcon>
+    </div>
+</MatDialogTitle>
+<MatDialogContent>
+    <MatTextField Label="Choose title for volume" @bind-Value="@Title"></MatTextField>
+ 
+ 
+</MatDialogContent>
+<MatDialogActions>
+    <MatButton OnClick="@(_ => AddVolumeToNovel())">Add Volume</MatButton>
+ 
+    <MatButton OnClick="@(_ => CloseDialog())">Close</MatButton>
+
+</MatDialogActions>
+
+@code {
+
+    [Parameter]
+    public string NovelId { get; set; }
+
+    [Parameter]
+    public string UserId { get; set; }
+
+    [Parameter]
+    public string Title { get; set; }
+
+    [CascadingParameter]
+    public MatDialogReference DialogReference { get; set; }
+
+    async Task<Volume> AddVolumeToNovel()
+    {
+        if(Title != null)
+        {
+            var result = await FirestoreService.AddVolumeToNovel(UserId, Title, NovelId);
+            if (result != null)
+            {
+                DialogReference.Close(result);
+
+                await MatDialogService.AlertAsync("Volume added");
+                return result;
+            }
+
+            await MatDialogService.AlertAsync("Failed to add volume");
+            return null;
+
+        }
+
+        await MatDialogService.AlertAsync("Title can not be empty.");
+        return null;
+
+    }
+
+    async Task CloseDialog()
+    {
+        DialogReference.Close("Test");
+    }
+
+}

@@ -1,0 +1,16 @@
+﻿.avatar {
+    border-radius: 50%;
+    max-width: 4em;
+    border: 2px solid #fff;
+}
+
+.user-info {
+    color: #fff;
+    margin: 10px;
+    border-radius: 5px;
+}
+
+.login-control {
+    display: flex;
+    align-items: center; /* Center items vertically */
+}

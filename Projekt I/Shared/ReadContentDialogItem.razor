@@ -1,0 +1,113 @@
+﻿@using Newtonsoft.Json;
+@using Projekt_I.Data.Models;
+@using Markdig;
+@inject IMatDialogService MatDialogService
+@inject IJSRuntime JSRuntime
+@inject FirestoreService FirestoreService
+
+<script>
+    window.getScrollbarPosition = () => {
+        const scrollContainer = document.querySelector('.mdc-dialog__content'); // Adjust the selector based on your dialog content class
+        console.log(scrollContainer);
+        return JSON.stringify(scrollContainer.scrollTop);
+    };
+</script>
+<script>
+    window.scrollToPosition = (position) => {
+        const scrollContainer = document.querySelector('.mdc-dialog__content'); // Adjust the selector based on your dialog content class
+        console.log(scrollContainer);
+        console.log(position)
+        scrollContainer.scrollTop = position;
+    };
+</script>
+
+<MatDialogTitle style="display: flex; align-items: center;">
+    <div style="cursor: pointer;">
+        <MatButton OnClick="@(_ => CloseDialog())">Close</MatButton>
+        <MatButton OnClick="@(_ => SaveScrollbarState())"> Bookmark </MatButton>
+    </div>
+</MatDialogTitle>
+<MatDialogContent>
+    @((MarkupString)HtmlContent)
+</MatDialogContent>
+<MatDialogActions>
+
+</MatDialogActions>
+
+@code {
+
+    [Parameter]
+    public string NovelId { get; set; }
+
+    [Parameter]
+    public string VolumeId { get; set; }
+
+    [Parameter]
+    public string ChapterId { get; set; }
+    [Parameter]
+    public string UserId { get; set; }
+
+    [Parameter]
+    public int SavedScrollPosition { get; set; }
+
+    [CascadingParameter]
+    public MatDialogReference DialogReference { get; set; }
+
+    public MarkupString HtmlContent { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {      
+
+        await base.OnInitializedAsync();
+        var content = await FirestoreService.GetContentFromChapter(NovelId, VolumeId, ChapterId);
+        var markdownContent = content?.ChapterContent ?? string.Empty;
+        var htmlContent = Markdig.Markdown.ToHtml(markdownContent);
+
+        HtmlContent = new MarkupString(htmlContent);
+
+
+
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (SavedScrollPosition != null)
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToPosition", SavedScrollPosition);
+        }
+    }
+
+    async Task SaveScrollbarState()
+    {
+        var positionJson  = await JSRuntime.InvokeAsync<string>("getScrollbarPosition");
+        var decision = await MatDialogService.ConfirmAsync("You can only have one bookmark, are you sure?");
+
+        if (decision == true)
+        {
+            // Use JavaScript interop to get and save the scrollbar position
+
+            SavedScrollPosition = JsonConvert.DeserializeObject<int>(positionJson);
+
+            var result = await FirestoreService.SaveUserLibrary(UserId, NovelId, VolumeId, ChapterId, SavedScrollPosition);
+            if(result == true)
+            {
+                await MatDialogService.AlertAsync("Bookmark saved!");
+                return;
+
+            }
+            await MatDialogService.AlertAsync("Failed to save bookmark.");
+
+        }
+        return;
+
+
+    }
+
+    async Task CloseDialog()
+    {
+        DialogReference.Close("Test");
+    }
+
+
+}

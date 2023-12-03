@@ -1,0 +1,49 @@
+﻿@page "/myaccount"
+@using Services
+@using Data.Models
+@inject UserContextService UserContextService
+@inject FirestoreService FirestoreService
+
+@if (userData is not null)
+{
+    <CascadingAuthenticationState>
+        <AuthorizeView>
+            <Authorized>
+                <h1> Welcome, @userData.Username</h1>
+
+
+                <h3 class="mat-subtitle1">Username:</h3>
+
+                <MatListItem Style="color:black">@userData.Username</MatListItem>
+                <MatDivider></MatDivider>
+
+                <h3 class="mat-subtitle1">Written books:</h3>
+
+                <MatListItem Style="color:black">@writtenBooks</MatListItem>
+                <MatDivider></MatDivider>
+
+            </Authorized>
+            <NotAuthorized>
+                <h1>You are currently not logged in.</h1>
+                <a href="auth/google-login" class="btn btn-secondary">Login with Google!</a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </CascadingAuthenticationState> 
+}
+
+@code {
+    User userData;
+    int writtenBooks = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = UserContextService.GetCurrentUserId();
+        var allWrittenBooks = await FirestoreService.GetAllUserWrittenNovels(userId);
+        writtenBooks = allWrittenBooks.Count();
+        @if(userId != null)
+        {
+            userData = await FirestoreService.GetUserData(userId);
+            
+        }
+    }
+}

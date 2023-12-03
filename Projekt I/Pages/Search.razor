@@ -1,0 +1,155 @@
+﻿@page "/search"
+@using Projekt_I.Data.Models;
+@inject FirestoreService FirestoreService
+
+
+
+<div class="mat-layout-grid" style="height: 100%;">
+    <div class="mat-layout-grid-inner" style="height: 10%;">
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-12" style="height: 100% ; width:100%;">
+            <div style="align-items:center; justify-content:center; display:flex;">
+                <MatTextField @bind-Value="@searchString" Label="Search by Title..." Icon="search" Style="width:60%"></MatTextField>
+                <MatButton OnClick="(e=> SearchNovelsByName(searchString))">Search</MatButton>
+            </div>
+
+
+        </div>
+    </div>
+    <div class="mat-layout-grid-inner" style="height: 90%;">
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-3" style="height: 100% ; width:100%;">
+            <div>
+                <MatAccordion>
+                    <MatExpansionPanel>
+                        <MatExpansionPanelSummary>
+                            <MatExpansionPanelHeader>Filters</MatExpansionPanelHeader>
+                        </MatExpansionPanelSummary>
+                        <MatExpansionPanelDetails>
+                            <MatChipSet Filter="true" @bind-SelectedChips="tagsInput">
+                                @foreach (var tag in Data.Models.Tags.GetBookGenres().OrderBy(x => x))
+                                {
+                                    <MatChip Label="@tag" Style="background-color: lightblue" IsCheckable=true></MatChip>
+                                }
+                            </MatChipSet>
+                        </MatExpansionPanelDetails>
+                    </MatExpansionPanel>
+
+                </MatAccordion>
+                <MatButton OnClick="(e => SearchNovelsByTags(tagsInput, IncludeAll))">Apply Filters</MatButton>
+                <MatSlideToggle @bind-Value="@IncludeAll"></MatSlideToggle>
+                <span>Include Any/Include All</span>
+            </div>
+
+        </div>
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-9" style="height: 100% ; width:100%;">
+
+            <div class="mat-layout-grid-inner" style="height: 100%">
+                <div class="mat-layout-grid-cell mat-layout-grid-cell-span-12" style="height: 100% ; width:100%;">
+                    @if (novels != null)
+                    {
+                        <div class="text-center">
+
+                            <div class="row" style="padding-bottom:5px">
+
+
+                                @foreach (var novel in novels)
+                                {
+                                    <div style="display:flex; align-items:center; padding:5px">
+
+                                        <MatCard class="demo-mat-card" Style="width:350px; height:450px">
+                                            <MatCardContent>
+                                                <MatCardMedia Style="height:150px" Wide="true" ImageUrl="https://placehold.co/600x400"></MatCardMedia>
+                                                <div class="demo-mat-card-content">
+                                                    <MatHeadline6 class="demo-mat-card-clean-margin">
+                                                        @novel.Title
+                                                    </MatHeadline6>
+                                                    <MatSubtitle2 class="demo-mat-card-clean-margin">
+                                                        by @novel.AuthorUsername
+                                                    </MatSubtitle2>
+                                                </div>
+
+                                                <MatBody2 Style="overflow:auto; height: 150px;" class="demo-mat-card-content demo-mat-card-clean-margin">
+                                                    @novel.Description
+                                                </MatBody2>
+                                                <MatBody2 Style="overflow:auto; height: 60px">
+                                                    @foreach (var tag in novel.Tags)
+                                                    {
+                                                        <MatChip Label="@tag" Style="max-width:90px;background-color: lightblue"></MatChip>
+                                                    }
+
+                                                </MatBody2>
+                                            </MatCardContent>
+                                            <MatCardActions>
+                                                <MatCardActionButtons>
+                                                    <MatButton OnClick="@(e => NavigateToAnotherPage(novel.Id))">Read</MatButton>
+                                                </MatCardActionButtons>
+                                            </MatCardActions>
+                                        </MatCard>
+
+
+                                    </div>
+
+                                }
+                            </div>
+                        </div>
+
+                    }
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+
+@code {
+
+    User userData;
+    List<Novel> novels;
+    List<Volume> volumes;
+
+    private string currentlySelectedNovel;
+    private string novelId;
+    private bool IncludeAll;
+
+    public string searchString;
+    MatChip[] tagsInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var content = await FirestoreService.GetAllNovels();
+        novels = content;
+    }
+
+    private void NavigateToAnotherPage(string novelId)
+    {
+        NavigationManager.NavigateTo("/novelview/" + novelId);
+    }
+    private async Task SearchNovelsByTags(MatChip[] tagsInput, bool includeAll)
+    {
+        if(tagsInput != null && (tagsInput.Length > 0))
+        {
+            var stringArray = tagsInput.Select(x => x.Label).ToArray();
+            novels = await FirestoreService.GetNovelsByTags(stringArray, includeAll);
+            this.StateHasChanged();           
+        }
+        else if (novels == null || novels.Count == 0 || tagsInput == null || tagsInput.Length == 0)
+        {
+            novels = await FirestoreService.GetAllNovels();
+        }
+
+        return;
+    }
+
+    private async Task SearchNovelsByName(string searchString)
+    {
+        if(searchString != null)
+        {
+            novels = await FirestoreService.GetNovelsByName(searchString);
+            return;
+        }
+        novels = await FirestoreService.GetAllNovels();
+
+    }
+}

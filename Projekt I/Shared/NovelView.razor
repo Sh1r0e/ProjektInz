@@ -1,0 +1,253 @@
+﻿@page "/novelview/{NovelId}"
+@using Microsoft.AspNetCore.WebUtilities;
+@using Projekt_I.Data.Models;
+@inject IMatDialogService MatDialogService
+@inject UserContextService UserContextService
+@inject FirestoreService FirestoreService
+
+
+
+<div class="mat-layout-grid" style="height: 100%">
+    <div class="mat-layout-grid-inner" style="height: 100%">
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-6">
+
+            <div class="mat-layout-grid-inner" style="height: 100%">
+
+                <div class="mat-layout-grid-cell mat-layout-grid-cell-span-3">
+
+                    <div class="novel-picture-panel" style="display: flex; justify-content: center; align-items: center;">
+                        <img style="max-height:300px; max-width:200px" src="https://placehold.co/200x300" />
+                    </div>
+
+                </div>
+                <div class="mat-layout-grid-cell mat-layout-grid-cell-span-9">
+                    @if (novel != null)
+                    {
+                        <div class="novel-info-panel" style="display: flex; flex-direction: column; height: 100%; padding: 10px;">
+                            <MatHeadline3>@novel.Title</MatHeadline3>
+                            <MatHeadline6>@novel.Description</MatHeadline6>
+                            <p style="margin-right: 5px;">
+                                @foreach (var tag in novel.Tags)
+                                {
+                                    <MatChip Style="background-color:lightblue" Label="@tag">
+
+
+                                    </MatChip>
+                                }
+                            </p>
+                            <MatHeadline6>Novel by: @novel.AuthorUsername</MatHeadline6>
+                            <MatButton OnClick="@(e=> AddOrRemoveFromReaderFavorites(@novel.Id))" Icon="favorite">@favoriteButtonContent</MatButton>
+                            <MatButton OnClick="@(e=> AddOrRemoveFromReaderPlanToRead(@novel.Id))" Icon="library_books">@planToReadButtonContent</MatButton>
+                        </div>
+                    }
+                </div>
+            </div>
+
+        </div>
+
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-6">
+            <div class="novel-pickup-wrapper">
+                @if (volumesList != null)
+                {
+                    <div style="display:flex; flex-direction:row; align-items:center;">
+
+                        <MatSelectValue Style="width :100% !important; max-width:400px !important;" @bind-Value="SelectedVolume" Items="@volumesList" ValueSelector="@(i => i)">
+                            <ItemTemplate Context="itemContext">
+                                <span>
+                                    Vol:@itemContext?.Number, @itemContext?.Title
+                                </span>
+                            </ItemTemplate>
+                        </MatSelectValue>
+
+                    </div>
+                    @if (chapterList != null)
+                    {
+                        <div style="display:flex; flex-direction:column; align-items:flex-start; padding-top:30px;">
+
+                            @foreach (var chapter in chapterList.OrderBy(x => x.Number))
+                            {
+                                <p>
+                                    <MatButton OnClick="@(e=> ShowChapterContentDialog(@chapter.Id))" Raised="true" Style="min-width:250px;">Chapter: @chapter.Number, @chapter.Title</MatButton>
+                                </p>
+                            }
+
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@code {
+
+    [Parameter] public string NovelId { get; set; }
+    bool ContinueReading;
+    private Novel novel;
+    private List<Volume> volumesList;
+    private List<Chapter> chapterList;
+    private int selectedTabIndex;
+    private bool isFavorite;
+    private bool isPlanToRead;
+    private string favoriteButtonContent = "Mark as favorite";
+    private string planToReadButtonContent = "Mark as plan to read";
+
+
+    private Volume selectedVolume;
+    public Volume SelectedVolume
+    {
+        get => selectedVolume;
+        set
+        {
+            selectedVolume = value;
+            OnSelectedVolumeChanged();
+        }
+    }
+
+    private MatSelectValue<Volume, Volume> VolumeSelector;
+
+
+    public string SelectedChapterId;
+    string UserId;
+    public string selected;
+
+    private async Task GetChaptersForCurrentVolume(string volumeId)
+    {
+        chapterList = await FirestoreService.GetChaptersFromVolume(NovelId, volumeId);
+        chapterList.OrderBy(x => x.Number);
+        if (chapterList == null)
+        {
+            chapterList = new List<Chapter>();
+        }
+        this.StateHasChanged();
+    }
+
+    public async void OnSelectedVolumeChanged()
+    {
+        await GetChaptersForCurrentVolume(SelectedVolume.Id);
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        novel = await FirestoreService.GetNovel(NovelId);
+        UserId = UserContextService.GetCurrentUserId();
+        volumesList = await FirestoreService.GetVolumesFromNovel(NovelId);
+        var sortedVolumesList = volumesList.OrderBy(x => x.Number);
+        volumesList = sortedVolumesList.ToList();
+        isFavorite = await FirestoreService.CheckIfNovelInFavorites(UserId, NovelId);
+        if (isFavorite)
+        {
+            favoriteButtonContent = "Remove from favorites";
+        }
+        isPlanToRead = await FirestoreService.CheckIfNovelInPlanToRead(UserId, NovelId);
+        if (isPlanToRead)
+        {
+            planToReadButtonContent = "Remove from plan to read";
+        }
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        ContinueReading = QueryHelpers.ParseQuery(uri.Query).TryGetValue("ContinueReading", out var continueReadingStr)
+                        && bool.TryParse(continueReadingStr, out var continueReading) && continueReading;
+        if (ContinueReading == true)
+        {
+            var library = await FirestoreService.GetUserLibrary(UserId);
+            SelectedVolume = volumesList.FirstOrDefault(x => x.Id == library.VolumeId);
+            await MatDialogService.OpenAsync(typeof(ReadContentDialogItem), new MatDialogOptions()
+                {
+                    Attributes = new Dictionary<string, object>()
+                {
+                    {"NovelId", NovelId },
+                    {"VolumeId", library.VolumeId},
+                    {"ChapterId", library.ChapterId},
+                    {"UserId", UserId},
+                    {"SavedScrollPosition", library.Bookmark}
+                },
+                    SurfaceStyle = "min-width: 1200px; max-height: 800px; overflow:auto"
+                });
+        }
+        else
+        {
+            SelectedVolume = volumesList.FirstOrDefault();
+        }
+    }
+
+    async Task ShowChapterContentDialog(string chapterId)
+    {
+        SelectedChapterId = chapterId;
+        var result = await MatDialogService.OpenAsync(typeof(ReadContentDialogItem), new MatDialogOptions()
+            {
+                Attributes = new Dictionary<string, object>()
+                {
+                    {"NovelId", NovelId },
+                    {"VolumeId", SelectedVolume.Id},
+                    {"ChapterId", SelectedChapterId},
+                    {"UserId", UserId}
+                },
+                SurfaceStyle = "min-width: 1200px; max-height: 800px; overflow:auto"
+            });
+        this.StateHasChanged();
+    }
+
+    async Task AddOrRemoveFromReaderFavorites(string novelId)
+    {
+        if (!isFavorite)
+        {
+            var addResult = await FirestoreService.MarkNovelAsFavorite(UserId, novelId);
+            if (addResult)
+            {
+                await MatDialogService.AlertAsync("Marked as favourite!");
+                isFavorite = true;
+                favoriteButtonContent = "Remove from favorites";
+                this.StateHasChanged();
+                return;
+            }
+            await MatDialogService.AlertAsync("Oops, something went wrong");
+            return;
+        }
+        var removeResult = await FirestoreService.RemoveNovelFromFavorites(UserId, novelId);
+        if (removeResult)
+        {
+            await MatDialogService.AlertAsync("Removed from favourites!");
+            isFavorite = false;
+            favoriteButtonContent = "Mark as favorite";
+            this.StateHasChanged();
+            return;
+        }
+        await MatDialogService.AlertAsync("Oops, something went wrong");
+        return;
+    }
+
+    async Task AddOrRemoveFromReaderPlanToRead(string novelId)
+    {
+        if (!isPlanToRead)
+        {
+            var addResult = await FirestoreService.MarkNovelAsPlanToRead(UserId, novelId);
+            if (addResult)
+            {
+                await MatDialogService.AlertAsync("Marked as plan to read!");
+                isPlanToRead = true;
+                planToReadButtonContent = "Remove from plan to read";
+                this.StateHasChanged();
+                return;
+            }
+            await MatDialogService.AlertAsync("Oops, something went wrong");
+            return;
+        }
+        var removeResult = await FirestoreService.RemoveNovelFromPlanToRead(UserId, novelId);
+        if (removeResult)
+        {
+            await MatDialogService.AlertAsync("Removed from plan to read!");
+            isPlanToRead = false;
+            planToReadButtonContent = "Mark as plan to read";
+            this.StateHasChanged();
+            return;
+        }
+        await MatDialogService.AlertAsync("Oops, something went wrong");
+        return;
+    }
+
+
+
+}

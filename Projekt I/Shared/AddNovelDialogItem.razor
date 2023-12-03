@@ -1,0 +1,95 @@
+﻿@inject IMatDialogService MatDialogService
+@inject FirestoreService FirestoreService
+@using Data.Models;
+
+
+<MatDialogTitle style="display: flex; align-items: center;">
+    <div style="flex: 1;">Add Novel</div>
+    <div @onclick="@(_=>CloseDialog())" style="cursor: pointer;">
+        <MatIcon Icon="@MatIconNames.Close"></MatIcon>
+    </div>
+</MatDialogTitle>
+<MatDialogContent>
+
+    <MatTextField Label="Choose title for Novel" @bind-Value="@Title" Style="display:flex"></MatTextField>
+    <p>
+
+        <MatTextField Label="Provide description for Novel" @bind-Value="@Description" Style="min-height:100px; display:flex" TextArea="true"></MatTextField>
+    </p>
+
+    <p>
+        <MatChipSet Filter="true" @bind-SelectedChips="Input">
+            @foreach(var tag in Data.Models.Tags.GetBookGenres())
+            {
+                <MatChip Label="@tag" IsCheckable=true></MatChip>
+            }
+        </MatChipSet>
+    </p>
+
+
+
+
+    <MatButton OnClick="@(_ => CreateNovel())">Add Novel</MatButton>
+
+    <MatButton OnClick="@(_ => CloseDialog())">Close</MatButton>
+</MatDialogContent>
+<MatDialogActions>
+
+</MatDialogActions>
+
+@code {
+
+    [Parameter]
+    public string UserId { get; set; }
+
+    [Parameter]
+    public string Title { get; set; }
+    [Parameter]
+    public string Description { get; set; }
+    [Parameter]
+    public MatChip[] Input { get; set; }
+
+    public List<string> Tags = new List<string>();
+
+
+
+    [CascadingParameter]
+    public MatDialogReference DialogReference { get; set; }
+
+    async Task CreateNovel()
+    {
+        if (Title != null && Description != null && Input != null)
+        {
+            await HandleInputString();
+            var result = await FirestoreService.CreateNovel(UserId, Title, Description, Tags.ToArray());
+            if (result == true)
+            {
+                DialogReference.Close("Test");
+
+                await MatDialogService.AlertAsync("Novel added");
+                return;
+            }
+
+            await MatDialogService.AlertAsync("Failed to add Novel");
+            return;
+
+        }
+
+        await MatDialogService.AlertAsync("Fields can not be empty.");
+        return;
+
+    }
+
+    async Task CloseDialog()
+    {
+        DialogReference.Close("Test");
+    }
+
+    async Task HandleInputString()
+    {
+        foreach(var tag in Input)
+        {
+            Tags.Add(tag.Label);
+        }
+    }
+}

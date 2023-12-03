@@ -1,0 +1,135 @@
+﻿@page "/"
+@using Blazorise
+
+
+
+<div class="mat-layout-grid" style="height:100%;">
+    <div class="mat-layout-grid-inner" style="height:100%;">
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-6" style="height:50%;">
+            <div style="display:flex; flex-direction:row; align-items:center; justify-content:center">
+                <Carousel @bind-SelectedSlide="@selectedSlide" Style="width:700px; height:400px">
+                    <CarouselSlide Name="1">
+                        <Image Source="/Assets/1.png" Text="Lights image" Display="Display.Block" Width="Width.Is100" Height="Height.Is50" />
+                    </CarouselSlide>
+                    <CarouselSlide Name="2">
+                        <Image Source="/Assets/2.png" Text="Keyboard image" Display="Display.Block" Width="Width.Is100" Height="Height.Is50" />
+                    </CarouselSlide>
+                    <CarouselSlide Name="3">
+                        <Image Source="/Assets/3.png" Text="Road image" Display="Display.Block" Width="Width.Is100" Height="Height.Is50" />
+                    </CarouselSlide>
+                    <CarouselSlide Name="4">
+                        <Image Source="/Assets/4.png" Text="Road image" Display="Display.Block" Width="Width.Is100" Height="Height.Is50" />
+                    </CarouselSlide>
+                </Carousel>
+
+            </div>
+        </div>
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-6" style="height:50%;">
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center">
+                <MatCard class="demo-mat-card">
+                    <MatCardContent Style="width:500px;height:300px; justify-content:center; align-items:center;">
+                        <h3>Welcome to NovelReads</h3>
+
+                        @if (context.User.Identity.IsAuthenticated)
+                        {
+                            <p>Hello, @context.User.Identity.Name!</p>
+                            <MatButton Raised="true" class="btn btn-primary" @onclick="Logout">Logout</MatButton>
+                        }
+                        else
+                        {
+                            <p>Please log in to access the application.</p>
+                            <MatButton Raised="true" class="btn btn-primary" @onclick="Login">Log in with Google</MatButton>
+                        }
+                    </MatCardContent>
+                </MatCard>
+            </div>
+        </div>
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-4" style="height:50%;">
+            <Card Style="height:250px">     
+                <CardBody>
+                    <CardTitle Size="4">
+                        Workshop
+                    </CardTitle>
+                    <CardText Style="height:100px">
+                        Create your novels here with our Markdown text editor, or upload them by drag and drop. Organise your volumes, structure your chapters and much more.
+                    </CardText>
+                    <MatButton Style="margin-top: 2em" Raised="true" @onclick="(e=>GoToWorkshop())" Color="Color.Primary" Margin="Margin.Is2.FromTop">
+                        Workshop <Icon Name="IconName.ArrowRight" />
+                    </MatButton>
+
+                </CardBody>
+            </Card>
+
+        </div>
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-4" style="height:50%;">
+            <Card Style="height:250px">
+                <CardBody>
+                    <CardTitle Size="4">
+                        Library
+                    </CardTitle>
+                    <CardText Style="height:100px">
+                        Add novels to favourites, plan to read and even bookmark your progress, everything in one place.
+                    </CardText>
+                    <MatButton Style="margin-top: 2em" Raised="true" @onclick="(e=>GoToLibrary())" Color="Color.Primary" Margin="Margin.Is2.FromTop">
+                        Library <Icon Name="IconName.ArrowRight" />
+                    </MatButton>
+                </CardBody>
+            </Card>
+
+        </div>
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-4" style="height:50%;">
+            <Card Style="height:250px">
+                <CardBody>
+                    <CardTitle Size="4">
+                        Community
+                    </CardTitle>
+                    <CardText Style="height:100px">
+                        Share your opinions, post comments and give ratings from 1 - 5, become an author or search trough our huge collection driven by our community.
+                    </CardText>
+                    <MatButton Style="margin-top: 2em" Raised="true" @onclick="(e => GoToSearch())" Color="Color.Primary" Margin="Margin.Is2.FromTop">
+                        Search <Icon Name="IconName.ArrowRight" />
+                    </MatButton>
+                </CardBody>
+            </Card>
+        </div>
+    </div>
+</div>
+
+
+
+@code {
+    private AuthenticationState context;
+
+    private string selectedSlide = "2";
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        context = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+    }
+
+    private async Task Login()
+    {
+        // Redirect to Google authentication
+        NavigationManager.NavigateTo("auth/login", true);
+    }
+
+    private async Task Logout()
+    {
+        // Redirect to Google authentication
+        NavigationManager.NavigateTo("auth/logout", true);
+    }
+
+    private async Task GoToLibrary()
+    {
+        NavigationManager.NavigateTo("/library");
+    }
+    private async Task GoToSearch()
+    {
+        NavigationManager.NavigateTo("/search");
+    }
+    private async Task GoToWorkshop()
+    {
+        NavigationManager.NavigateTo("/workshop");
+    }
+}

@@ -1,0 +1,473 @@
+﻿@page "/workshop"
+@using Projekt_I.Data.Models;
+
+@inject FirestoreService FirestoreService
+@inject UserContextService UserContextService
+@inject IMatToaster Toaster
+@inject IMatDialogService MatDialogService
+
+
+<div class="mat-layout-grid" style="height: 100%;">
+    <div class="mat-layout-grid-inner" style="height: 10%;">
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-12" style="height: 100% ; width:100%;">
+            <div class="top-panel-wrapper" style="height:100%; width:100%; display:flex; flex-direction:row; align-items: center;">
+                <MatHeadline6>Choose your novel:</MatHeadline6>
+                <div class="novel-pickup-wrapper" style="flex: 1; width:70%; display:flex; align-items: center ; padding: 5px !important">
+                    <MatSelectValue Style="width :100% !important;" Items="@userWrittenNovels" ValueSelector="@(i => GetVolumesFromNovel(i.Id, i.Title))">
+                        <ItemTemplate>
+                            <span>
+                                @context?.Title
+                            </span>
+                        </ItemTemplate>
+                    </MatSelectValue>
+                </div>
+
+                <div class="novel-buttons-wrapper" style="display: flex; flex-direction: row; width: 30%">
+                    <MatButton Raised="true" @onclick="@(e => OpenAddNovelDialogFromService())"> Add </MatButton>
+                    @if(selectedNovelId != null)
+                    {
+                        <MatButton Raised="true" @onclick="@(e => EditNovel(selectedNovelId))" >Edit</MatButton>
+                        <MatButton Raised="true" @onclick="@(e => RemoveNovel(selectedNovelId))">Remove</MatButton>
+                        
+                    }
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+    <div class="mat-layout-grid-inner" style="height: 90%;">
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-3" style="height: 100% ; width:100%;">
+            <div class="table-of-contents-wrapper" style="height:100%; width: 100%">
+                @if (Novel != null)
+                {
+                    <MatTreeView TNode="TreeNodeModel"
+                                 RootNode="@Novel"
+                                 GetChildNodesCallback="@GetChildNodes"
+                                 LoadChildNodesCallback="@LoadChildNodesAsync"
+                                 SelectedNodeChanged="@HandleSelectedNodeChanged">
+                        <NodeTemplate>
+                                @context.Title
+                                @if (@context.Type == NodeType.Volume)
+                                {
+                                    <MatIconButton Icon="delete" @onclick="@(e => RemoveVolume(@context.Id))"></MatIconButton>
+                                    <MatIconButton Icon="create" @onclick="@(e => EditVolume(@context.Id))"></MatIconButton>
+                                <p>
+                                    <MatButton Icon="add" @onclick="@(e => OpenAddChapterDialogFromService(@context.Id, Novel))">Add Chapter</MatButton>
+                                </p>
+                                }
+                                @if (@context.Type == NodeType.Chapter)
+                                {
+                                <MatIconButton Icon="delete" @onclick="@(e => RemoveChapter(@context.Id, @context.ParentId, Novel))"></MatIconButton>
+                                <MatIconButton Icon="create" @onclick="@(e => EditChapter(@context.Id, @context.ParentId, @context.Title, Novel))"></MatIconButton>
+
+                                }
+                        </NodeTemplate>
+                    </MatTreeView>
+                }
+                <div class="add-new-volume-wrapper" style="display: flex; justify-content: center; padding-top: 20px;">
+                    @if (Novel != null)
+                    {
+                        <MatButton Icon="add" OnClick="@(e => OpenAddVolumeDialogFromService())">Add Volume</MatButton>             
+                    }
+                </div>
+
+            </div>
+
+        </div>
+        <div class="mat-layout-grid-cell mat-layout-grid-cell-span-9" style="height: 100% ; width:100%;">
+
+            <div class="mat-layout-grid-inner" style="height: 100%">
+                <div class="mat-layout-grid-cell mat-layout-grid-cell-span-12" style="height: 100% ; width:100%;">
+                    <div style="height: 5%; padding: 10px; display:flex; justify-content:center;">
+                        @if(currentContent != null)
+                        {
+                            <MatButton Icon="add" @onclick="@(e => SaveContent())">Save Content</MatButton>        
+                        }
+                    </div>
+                    <div style="height: 95%; padding: 10px; align-items:center; flex-direction:column;">
+                        @if(currentContent != null)
+                        {
+                            <Markdown MaxHeight="500px" ScrollbarStyle="native" Value="@currentContentValue" ValueChanged="@OnMarkdownValueChanged">
+                            </Markdown>
+                        }
+                        else
+                        {
+                            <MatHeadline6>Please select a novel, volume and chapter to display the content</MatHeadline6>
+                            <Blazorise.Image Style="max-width:400px; max-height:400px;" Source="/Assets/open-book.png"></Blazorise.Image>
+                        }
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+
+
+@code {
+    public enum NodeType { Novel, Volume, Chapter }
+
+    class TreeNodeModel
+    {
+
+        public string Title { get; set; }
+        public string Id { get; set; }
+        public string ParentId { get; set; }
+        public int Number { get; set; }
+        public NodeType Type { get; set; }
+        public List<TreeNodeModel> Nodes { get; set; }
+    }
+
+    TreeNodeModel Novel;
+    string UserId;
+    List<Novel> userWrittenNovels = new List<Novel>();
+    List<Volume> volumesFromNovel = new List<Volume>();
+
+    Content currentContent;
+    TreeNodeModel CurrentlySelectedChapterNode;
+    string currentContentValue;
+    string currentContentHtml;
+    string selectedNovelId;
+
+    bool dialogVolumeAddIsOpen;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        base.OnInitializedAsync();
+        UserId = UserContextService.GetCurrentUserId();
+        userWrittenNovels = await FirestoreService.GetAllUserWrittenNovels(UserId);
+        if (userWrittenNovels.Any())
+        {
+            this.StateHasChanged();
+        }
+    }
+
+    private IEnumerable<TreeNodeModel> GetChildNodes(TreeNodeModel parentNode)
+    {
+        if (parentNode.Nodes == null)
+            return null; // LoadChildNodesAsync will be called to load the child nodes
+        else
+            return parentNode.Nodes;
+    }
+
+    private async Task<IEnumerable<TreeNodeModel>> LoadChildNodesAsync(TreeNodeModel parentNode)
+    {
+        if (parentNode.Type == NodeType.Novel)
+        {
+            if (parentNode.Nodes == null)
+            {
+                parentNode.Nodes = new List<TreeNodeModel>();
+                foreach (var volume in volumesFromNovel)
+                {
+                    parentNode.Nodes.Add(new TreeNodeModel()
+                        {
+                            Id = volume.Id,
+                            ParentId = parentNode.Id,
+                            Title = volume.Title,
+                            Number = volume.Number,
+                            Type = NodeType.Volume
+                        });
+                }
+            }
+            return parentNode.Nodes;
+        }
+        if (parentNode.Type == NodeType.Volume)
+        {
+            if (parentNode.Nodes == null)
+            {
+                var chapters = await GetChaptersFromVolume(parentNode.Id, parentNode.ParentId);
+                parentNode.Nodes = new List<TreeNodeModel>();
+                foreach (var chapter in chapters)
+                {
+                    parentNode.Nodes.Add(new TreeNodeModel()
+                        {
+                            Id = chapter.Id,
+                            ParentId = parentNode.Id,
+                            Title = chapter.Title,
+                            Number = chapter.Number,
+                            Type = NodeType.Chapter
+                        });
+                }
+
+                return parentNode.Nodes;
+            }
+        }
+
+        return parentNode.Nodes;
+    }
+
+
+
+    private async Task GetVolumesFromNovel(string novelId, string novelTitle)
+    {
+        volumesFromNovel = await FirestoreService.GetVolumesFromNovel(novelId);
+        volumesFromNovel.OrderBy(x => x.Number);
+        selectedNovelId = novelId;
+        Novel = new TreeNodeModel()
+            {
+                Id = novelId,
+                ParentId = "0",
+                Title = novelTitle,
+                Type = NodeType.Novel
+            };
+        currentContent = null;
+        this.StateHasChanged();
+        return;
+    }
+
+    private async Task<List<Chapter>> GetChaptersFromVolume(string volumeId, string novelId)
+    {
+        var chaptersFromVolume = await FirestoreService.GetChaptersFromVolume(novelId, volumeId);
+        chaptersFromVolume.OrderBy(x => x.Number);
+        return chaptersFromVolume;
+    }
+
+
+    private async void HandleSelectedNodeChanged(TreeNodeModel selectedNode)
+    {
+        if (selectedNode != null)
+        {          
+            await GetContentFromChapter(selectedNode);
+        }
+    }
+
+    private async Task GetContentFromChapter(TreeNodeModel selectedNode)
+    {
+        if (selectedNode.Type == NodeType.Chapter)
+        {
+            currentContent = await FirestoreService.GetContentFromChapter(selectedNovelId, selectedNode.ParentId, selectedNode.Id);
+            currentContentValue = currentContent.ChapterContent;
+            CurrentlySelectedChapterNode = selectedNode;
+            this.StateHasChanged();
+
+        }
+        return;
+    }
+
+    Task OnMarkdownValueChanged(string value)
+    {
+        currentContentValue = value;
+        currentContentHtml = Markdig.Markdown.ToHtml(currentContentValue ?? string.Empty);
+
+        return Task.CompletedTask;
+    }
+
+    private async Task RemoveVolume(string volumeId)
+    {
+        var result = await MatDialogService.ConfirmAsync("Are you sure you want to delete volume?");
+        if( result == true)
+        {        
+            await FirestoreService.RemoveVolumeFromNovel(UserId, selectedNovelId, volumeId);
+
+            var nodeToRemove = Novel.Nodes.FirstOrDefault(x => x.Id == volumeId);
+            Novel.Nodes.Remove(nodeToRemove);
+
+            this.StateHasChanged();
+        }
+    }
+
+    private async Task RemoveChapter(string chapterId, string volumeId, TreeNodeModel novel)
+    {
+        var result = await MatDialogService.ConfirmAsync("Are you sure you want to delete chapter?");
+        if(result == true)
+        {
+            await FirestoreService.RemoveChapterFromVolume(UserId, selectedNovelId, volumeId, chapterId);
+
+            var volumeNode = novel.Nodes.FirstOrDefault(x => x.Id == volumeId);
+
+            if (volumeNode != null)
+            {
+                var nodeToRemove = volumeNode.Nodes.FirstOrDefault(x => x.Id == chapterId);
+
+                if (nodeToRemove != null)
+                {
+                    volumeNode.Nodes.Remove(nodeToRemove);
+                }
+            }
+
+            currentContent = null;
+
+            this.StateHasChanged();
+        }
+    }
+    private async Task SaveContent()
+    {
+        var result = await FirestoreService.UpdateContentInChapter(UserId, selectedNovelId, CurrentlySelectedChapterNode.ParentId, CurrentlySelectedChapterNode.Id, currentContent.Id, currentContentValue);
+
+        if(result == true)
+        {
+            await MatDialogService.AlertAsync("Content saved");
+            return;
+        }
+        await MatDialogService.AlertAsync("Failed to save content");
+    }
+
+    async Task OpenAddVolumeDialogFromService()
+    {
+        var result = await MatDialogService.OpenAsync(typeof(AddVolumeDialogItem), new MatDialogOptions()
+            {
+                Attributes = new Dictionary<string, object>()
+                {
+                {"NovelId", selectedNovelId },
+                {"UserId", UserId},
+                },
+                SurfaceStyle = "min-width: 600px; max-width: 700px;"
+            });
+
+        if (result is Volume addedVolume)
+        {
+            Novel.Nodes.Add(new TreeNodeModel
+            {
+                 Title = addedVolume.Title,
+                 Id = addedVolume.Id, 
+                 ParentId = Novel.Id,
+                 Number = addedVolume.Number,
+                 Type = NodeType.Volume
+            });
+
+            this.StateHasChanged();
+        }
+
+
+        this.StateHasChanged();
+    }
+
+    async Task OpenAddChapterDialogFromService(string volumeId, TreeNodeModel novel)
+    {
+        var result = await MatDialogService.OpenAsync(typeof(AddChapterToVolumeDialogItem), new MatDialogOptions()
+            {
+                Attributes = new Dictionary<string, object>()
+                {
+                {"NovelId", selectedNovelId },
+                {"UserId", UserId},
+                {"VolumeId", volumeId},
+                },
+                SurfaceStyle = "min-width: 600px; max-width: 700px;"
+            });
+        if (result is Chapter addedChapter)
+        {
+            var volumeNodes = Novel.Nodes.FirstOrDefault(x => x.Id == volumeId);
+            volumeNodes.Nodes.Add(new TreeNodeModel
+                {
+                    Title = addedChapter.Title,
+                    Id = addedChapter.Id,
+                    ParentId = volumeId,
+                    Number = addedChapter.Number,
+                    Type = NodeType.Chapter
+                });
+
+            this.StateHasChanged();
+        }
+
+        this.StateHasChanged();
+    }
+
+    async Task OpenAddNovelDialogFromService()
+    {
+        var result = await MatDialogService.OpenAsync(typeof(AddNovelDialogItem), new MatDialogOptions()
+            {
+                Attributes = new Dictionary<string, object>()
+                {
+                {"UserId", UserId},
+                },
+                SurfaceStyle = "min-width: 600px; max-width: 700px;"
+            });
+        userWrittenNovels = await FirestoreService.GetAllUserWrittenNovels(UserId);
+        this.StateHasChanged();
+    }
+
+    async Task RemoveNovel(string novelId)
+    {
+        var result = await MatDialogService.ConfirmAsync("Are you sure you want to delete Novel? You will loose all its contents!");
+        if (result == true)
+        {
+            var finalResult = await FirestoreService.RemoveNovel(UserId, novelId);
+
+            if( finalResult == true)
+            {
+                await MatDialogService.AlertAsync("Success, novel has been deleted");
+                userWrittenNovels = await FirestoreService.GetAllUserWrittenNovels(UserId);
+                this.StateHasChanged();
+
+            }
+
+        }
+    }
+
+    async Task EditNovel(string novelId)
+    {
+        var novel = userWrittenNovels.Where(x => x.Id == novelId).FirstOrDefault();
+        var result = await MatDialogService.OpenAsync(typeof(EditNovelDialogItem), new MatDialogOptions()
+            {
+                Attributes = new Dictionary<string, object>()
+                {
+                {"UserId", UserId},
+                {"NovelId", novelId},
+                {"Title", novel.Title},
+                {"Description", novel.Description},
+                },
+                SurfaceStyle = "min-width: 600px; max-width: 700px;"
+            });
+        if( result != null)
+        {           
+            novel.Title = result as string;
+        }
+        this.StateHasChanged();
+    }
+
+    async Task EditVolume(string volumeId)
+    {
+        var volume = volumesFromNovel.Where(x => x.Id == volumeId).FirstOrDefault();
+        var result = await MatDialogService.OpenAsync(typeof(EditVolumeDialogItem), new MatDialogOptions()
+            {
+                Attributes = new Dictionary<string, object>()
+                {
+                {"UserId", UserId},
+                {"NovelId", selectedNovelId},
+                {"Title", volume.Title},
+                {"VolumeId", volumeId },
+            },
+                SurfaceStyle = "min-width: 600px; max-width: 700px;"
+            });
+        if(result != null)
+        {
+            Novel.Nodes.FirstOrDefault(x => x.Id == volumeId).Title = result as string;
+        }
+        this.StateHasChanged();
+    }
+
+    async Task EditChapter(string chapterId, string volumeId, string currentTitle, TreeNodeModel novel)
+    {
+        var result = await MatDialogService.OpenAsync(typeof(EditChapterInVolumeDialogItem), new MatDialogOptions()
+            {
+                Attributes = new Dictionary<string, object>()
+                {
+                {"UserId", UserId},
+                {"NovelId", selectedNovelId},
+                {"Title", currentTitle},
+                {"VolumeId", volumeId },
+                {"ChapterId", chapterId},
+            },
+                SurfaceStyle = "min-width: 600px; max-width: 700px;"
+            });
+        if (result != null)
+        {
+            var volumeNode = novel.Nodes.FirstOrDefault(x => x.Id == volumeId);
+
+            if (volumeNode != null)
+            {
+                var nodeToEdit = volumeNode.Nodes.FirstOrDefault(x => x.Id == chapterId);
+
+                if (nodeToEdit != null)
+                {
+                    nodeToEdit.Title = result as string;
+                }
+            }
+        }
+        this.StateHasChanged();
+    }
+}
