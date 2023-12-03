@@ -14,6 +14,6 @@ namespace Projekt_I.Data.Models
         [FirestoreProperty]
         public string ChapterId { get; set; }
         [FirestoreProperty]
-        public int Bookmark { get; set; }
+        public double Bookmark { get; set; }
     }
 }

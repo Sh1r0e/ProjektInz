@@ -48,7 +48,7 @@
     public string UserId { get; set; }
 
     [Parameter]
-    public int SavedScrollPosition { get; set; }
+    public double SavedScrollPosition { get; set; }
 
     [CascadingParameter]
     public MatDialogReference DialogReference { get; set; }
@@ -87,7 +87,7 @@
         {
             // Use JavaScript interop to get and save the scrollbar position
 
-            SavedScrollPosition = JsonConvert.DeserializeObject<int>(positionJson);
+            SavedScrollPosition = JsonConvert.DeserializeObject<double>(positionJson);
 
             var result = await FirestoreService.SaveUserLibrary(UserId, NovelId, VolumeId, ChapterId, SavedScrollPosition);
             if(result == true)

@@ -1,8 +1,10 @@
-﻿using Google.Cloud.Firestore;
+﻿using Google.Apis.Upload;
+using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Routing.Template;
 using Projekt_I.Data;
 using Projekt_I.Data.Models;
 using System.Linq;
+using System.Reflection;
 using System.Security.Claims;
 
 namespace Projekt_I.Services
@@ -54,19 +56,15 @@ namespace Projekt_I.Services
 
             List<Novel> novels = new List<Novel>();
 
-            if (novelsSnapshot.Any())
+            foreach (var document in novelsSnapshot)
             {
-
-                foreach (var document in novelsSnapshot)
-                {
-                    var serializedNovel = document.ConvertTo<Novel>();
-                    novels.Add(serializedNovel);
-                }
-
-                return novels;
+                var serializedNovel = document.ConvertTo<Novel>();
+                novels.Add(serializedNovel);
             }
 
             return novels;
+
+
         }
 
         public async Task<Novel> GetNovel(string novelId)
@@ -86,15 +84,10 @@ namespace Projekt_I.Services
 
             var novels = new List<Novel>();
 
-            if (novelsSnapshot.Any())
+            foreach (var document in novelsSnapshot)
             {
-                foreach (var document in novelsSnapshot)
-                {
-                    var serializedVolume = document.ConvertTo<Novel>();
-                    novels.Add(serializedVolume);
-                }
-
-                return novels;
+                var serializedVolume = document.ConvertTo<Novel>();
+                novels.Add(serializedVolume);
             }
 
             return novels;
@@ -137,13 +130,11 @@ namespace Projekt_I.Services
             var novels = new List<Novel>();
             var querySnapshot = await query.GetSnapshotAsync();
 
-            if (querySnapshot.Any())
+
+            foreach (var document in querySnapshot)
             {
-                foreach (var document in querySnapshot)
-                {
-                    var serializedVolume = document.ConvertTo<Novel>();
-                    novels.Add(serializedVolume);
-                }
+                var serializedVolume = document.ConvertTo<Novel>();
+                novels.Add(serializedVolume);
             }
 
             return novels;
@@ -157,15 +148,10 @@ namespace Projekt_I.Services
 
             var volumes = new List<Volume>();
 
-            if (volumesSnapshot.Any())
+            foreach (var document in volumesSnapshot)
             {
-                foreach (var document in volumesSnapshot)
-                {
-                    var serializedVolume = document.ConvertTo<Volume>();
-                    volumes.Add(serializedVolume);
-                }
-
-                return volumes;
+                var serializedVolume = document.ConvertTo<Volume>();
+                volumes.Add(serializedVolume);
             }
 
             return volumes;
@@ -183,16 +169,13 @@ namespace Projekt_I.Services
 
             var chapters = new List<Chapter>();
 
-            if (chaptersSnapshot.Any())
+            foreach (var document in chaptersSnapshot)
             {
-                foreach (var document in chaptersSnapshot)
-                {
-                    var serializedChapter = document.ConvertTo<Chapter>();
-                    chapters.Add(serializedChapter);
-                }
-                return chapters;
+                var serializedChapter = document.ConvertTo<Chapter>();
+                chapters.Add(serializedChapter);
             }
             return chapters;
+
         }
 
         public async Task<Content> GetContentFromChapter(string novelId, string volumeId, string chapterId)
@@ -238,47 +221,55 @@ namespace Projekt_I.Services
 
         public async Task<Volume> AddVolumeToNovel(string userId, string title, string novelId)
         {
+
+            if (!(await IsUserAuthorOfNovel(userId, novelId)))
+            {
+                return null;
+            }
+
+
             Volume volume;
             var novelDocument = _firestoreDb.Collection("novels").Document(novelId);
             var novelSnapshot = await novelDocument.GetSnapshotAsync();
 
             var novel = novelSnapshot.ConvertTo<Novel>();
+            var volumesRef = novelDocument.Collection("volumes");
 
-            if (novel.AuthorId == userId)
+            var volumesSnapshot = await volumesRef.GetSnapshotAsync();
+
+            if (volumesSnapshot == null)
             {
-                var volumesRef = novelDocument.Collection("volumes");
-
-                var volumesSnapshot = await volumesRef.GetSnapshotAsync();
-
-                List<Volume> volumes = new List<Volume>();
-
-                if (volumesSnapshot != null)
-                {
-                    foreach (var document in volumesSnapshot)
-                    {
-                        volumes.Add(document.ConvertTo<Volume>());
-                    }
-
-                    int newestNumber = volumes.Any() ? volumes.Max(x => x.Number) : 0;
-
-                    volume = new Volume()
-                    {
-                        Number = newestNumber + 1,
-                        Title = title,
-                    };
-                    var result = await volumesRef.AddAsync(volume);
-                    if (result != null)
-                    {
-                        volume.Id = result.Id;
-
-                        await result.SetAsync(volume);
-
-                        return volume;
-                    }
-                }
+                return null;
             }
 
-            return null;
+            List<Volume> volumes = new List<Volume>();
+
+            foreach (var document in volumesSnapshot)
+            {
+                volumes.Add(document.ConvertTo<Volume>());
+            }
+
+            int newestNumber = volumes.Any() ? volumes.Max(x => x.Number) : 0;
+
+            volume = new Volume()
+            {
+                Number = newestNumber + 1,
+                Title = title,
+            };
+
+            var result = await volumesRef.AddAsync(volume);
+
+            if (result == null)
+            {
+                return null;
+            }
+            volume.Id = result.Id;
+
+            await result.SetAsync(volume);
+
+            return volume;
+
+
         }
 
         public async Task<bool> RemoveVolumeFromNovel(string userId, string novelId, string volumeId)
@@ -287,172 +278,181 @@ namespace Projekt_I.Services
             var novelDocument = _firestoreDb.Collection("novels").Document(novelId);
 
 
-            if (await IsUserAuthorOfNovel(userId, novelId))
+            if (!(await IsUserAuthorOfNovel(userId, novelId)))
             {
-                var volumesRef = novelDocument.Collection("volumes");
-
-                var volumeToDeleteQuery = volumesRef.WhereEqualTo("Id", volumeId);
-                var volumeToDeleteSnapshot = await volumeToDeleteQuery.GetSnapshotAsync();
-
-                if (volumeToDeleteSnapshot != null && volumeToDeleteSnapshot.Count > 0)
-                {
-                    var volumeDocument = volumeToDeleteSnapshot.Documents.First().Reference;
-
-                    await volumeDocument.DeleteAsync();
-
-
-                    var remainingVolumesQuery = await volumesRef.OrderBy("Number").GetSnapshotAsync();
-
-                    int newNumber = 1;
-                    foreach (var remainingVolumeDocument in remainingVolumesQuery.Documents)
-                    {
-                        var remainingVolume = remainingVolumeDocument.ConvertTo<Volume>();
-                        var remainingVolumeReference = remainingVolumeDocument.Reference;
-
-                        remainingVolume.Number = newNumber++;
-
-                        await remainingVolumeReference.SetAsync(remainingVolume);
-                    }
-                    return true;
-                }
+                return false;
             }
 
-            return false;
+            var volumesRef = novelDocument.Collection("volumes");
+
+            var volumeToDeleteQuery = volumesRef.WhereEqualTo("Id", volumeId);
+            var volumeToDeleteSnapshot = await volumeToDeleteQuery.GetSnapshotAsync();
+
+            if (volumeToDeleteSnapshot == null)
+            {
+                return false;
+            }
+            if (volumeToDeleteSnapshot.Count == 0)
+            {
+                return false;
+            }
+            var volumeDocument = volumeToDeleteSnapshot.Documents.First().Reference;
+
+            await volumeDocument.DeleteAsync();
+
+
+            var remainingVolumesQuery = await volumesRef.OrderBy("Number").GetSnapshotAsync();
+
+            int newNumber = 1;
+            foreach (var remainingVolumeDocument in remainingVolumesQuery.Documents)
+            {
+                var remainingVolume = remainingVolumeDocument.ConvertTo<Volume>();
+                var remainingVolumeReference = remainingVolumeDocument.Reference;
+
+                remainingVolume.Number = newNumber++;
+
+                await remainingVolumeReference.SetAsync(remainingVolume);
+            }
+            return true;
 
         }
 
         public async Task<bool> RemoveChapterFromVolume(string userId, string novelId, string volumeId, string chapterId)
         {
-            if (await IsUserAuthorOfNovel(userId, novelId))
+            if (!(await IsUserAuthorOfNovel(userId, novelId)))
             {
-                var chaptersCollectionRef = _firestoreDb.Collection("novels")
-                    .Document(novelId)
-                    .Collection("volumes")
-                    .Document(volumeId)
-                    .Collection("chapters");
+                return false;
+            }
+            var chaptersCollectionRef = _firestoreDb.Collection("novels")
+                .Document(novelId)
+                .Collection("volumes")
+                .Document(volumeId)
+                .Collection("chapters");
 
 
-                var chapterDocument = await chaptersCollectionRef.Document(chapterId).GetSnapshotAsync();
-                if (chapterDocument.Exists)
-                {
-
-                    var contentSubcollectionRef = chapterDocument.Reference.Collection("content");
-                    var contentDocs = await contentSubcollectionRef.ListDocumentsAsync().ToListAsync();
-
-                    foreach (var contentDoc in contentDocs)
-                    {
-                        await contentDoc.DeleteAsync();
-                    }
-
-                    await chapterDocument.Reference.DeleteAsync();
-
-
-                    var remainingChaptersQuery = await chaptersCollectionRef.OrderBy("Number").GetSnapshotAsync();
-
-                    int newNumber = 1;
-
-
-                    foreach (var remainingChapterDocument in remainingChaptersQuery.Documents)
-                    {
-                        var remainingChapter = remainingChapterDocument.ConvertTo<Chapter>();
-                        var remainingChapterReference = remainingChapterDocument.Reference;
-
-                        remainingChapter.Number = newNumber++;
-
-
-                        await remainingChapterReference.SetAsync(remainingChapter);
-                    }
-
-                    return true;
-                }
+            var chapterDocument = await chaptersCollectionRef.Document(chapterId).GetSnapshotAsync();
+            if (!chapterDocument.Exists)
+            {
+                return false;
             }
 
-            return false;
+            var contentSubcollectionRef = chapterDocument.Reference.Collection("content");
+            var contentDocs = await contentSubcollectionRef.ListDocumentsAsync().ToListAsync();
+
+            foreach (var contentDoc in contentDocs)
+            {
+                await contentDoc.DeleteAsync();
+            }
+
+            await chapterDocument.Reference.DeleteAsync();
+
+
+            var remainingChaptersQuery = await chaptersCollectionRef.OrderBy("Number").GetSnapshotAsync();
+
+            int newNumber = 1;
+
+            foreach (var remainingChapterDocument in remainingChaptersQuery.Documents)
+            {
+                var remainingChapter = remainingChapterDocument.ConvertTo<Chapter>();
+                var remainingChapterReference = remainingChapterDocument.Reference;
+
+                remainingChapter.Number = newNumber++;
+
+
+                await remainingChapterReference.SetAsync(remainingChapter);
+            }
+
+            return true;
         }
 
         public async Task<Chapter> AddChapterToVolume(string userId, string novelId, string volumeId, string chapterTitle)
         {
-            if (await IsUserAuthorOfNovel(userId, novelId))
+            if (!(await IsUserAuthorOfNovel(userId, novelId)))
             {
-                var chaptersCollectionRef = _firestoreDb.Collection("novels")
-                    .Document(novelId)
-                    .Collection("volumes")
-                    .Document(volumeId)
-                    .Collection("chapters");
+                return null;
+            }
+            var chaptersCollectionRef = _firestoreDb.Collection("novels")
+                .Document(novelId)
+                .Collection("volumes")
+                .Document(volumeId)
+                .Collection("chapters");
 
-                var currentChapters = await GetChaptersFromVolume(novelId, volumeId);
+            var currentChapters = await GetChaptersFromVolume(novelId, volumeId);
 
-                int newChapterNumber = currentChapters.Any() ? currentChapters.Max(x => x.Number) + 1 : 1;
+            int newChapterNumber = currentChapters.Any() ? currentChapters.Max(x => x.Number) + 1 : 1;
 
-                var newChapter = new Chapter
-                {
-                    Title = chapterTitle,
-                    Number = newChapterNumber,
-                };
+            var newChapter = new Chapter
+            {
+                Title = chapterTitle,
+                Number = newChapterNumber,
+            };
 
-                var chapterResult = await chaptersCollectionRef.AddAsync(newChapter);
+            var chapterResult = await chaptersCollectionRef.AddAsync(newChapter);
 
-                if (chapterResult != null)
-                {
-
-                    newChapter.Id = chapterResult.Id;
-                    await chapterResult.SetAsync(newChapter);
-
-                    var contentRef = _firestoreDb.Collection("novels")
-                        .Document(novelId)
-                        .Collection("volumes")
-                        .Document(volumeId)
-                        .Collection("chapters")
-                        .Document(newChapter.Id)
-                        .Collection("content")
-                        .Document();
-
-                    var content = new Content
-                    {
-                        Id = contentRef.Id,
-                        ChapterContent = " ",
-                    };
-
-                    var contentResult = await contentRef.SetAsync(content);
-
-                    if (contentResult != null)
-                    {
-                        return newChapter;
-                    }
-                }
+            if (chapterResult != null)
+            {
+                return null;
             }
 
+            newChapter.Id = chapterResult.Id;
+            await chapterResult.SetAsync(newChapter);
+
+            var contentRef = _firestoreDb.Collection("novels")
+                .Document(novelId)
+                .Collection("volumes")
+                .Document(volumeId)
+                .Collection("chapters")
+                .Document(newChapter.Id)
+                .Collection("content")
+                .Document();
+
+            var content = new Content
+            {
+                Id = contentRef.Id,
+                ChapterContent = " ",
+            };
+
+            var contentResult = await contentRef.SetAsync(content);
+
+            if (contentResult != null)
+            {
+                return newChapter;
+            }
             return null;
+
         }
 
         public async Task<bool> UpdateContentInChapter(string userId, string novelId, string volumeId, string chapterId, string contentId, string newContent)
         {
 
-            if (await IsUserAuthorOfNovel(userId, novelId))
+            if (!(await IsUserAuthorOfNovel(userId, novelId)))
             {
-                var contentDocumentRef = _firestoreDb.Collection("novels")
-                    .Document(novelId)
-                    .Collection("volumes")
-                    .Document(volumeId)
-                    .Collection("chapters")
-                    .Document(chapterId)
-                    .Collection("content")
-                    .Document(contentId);
 
-                var contentSnapshot = await contentDocumentRef.GetSnapshotAsync();
-
-                if (contentSnapshot.Exists)
-                {
-                    var updatedContent = new Content() { ChapterContent = newContent, Id = contentId };
-
-
-                    await contentDocumentRef.SetAsync(updatedContent);
-
-                    return true;
-                }
+                return false;
             }
+            var contentDocumentRef = _firestoreDb.Collection("novels")
+                .Document(novelId)
+                .Collection("volumes")
+                .Document(volumeId)
+                .Collection("chapters")
+                .Document(chapterId)
+                .Collection("content")
+                .Document(contentId);
 
-            return false;
+            var contentSnapshot = await contentDocumentRef.GetSnapshotAsync();
+
+            if (!contentSnapshot.Exists)
+            {
+                return false;
+            }
+            var updatedContent = new Content() { ChapterContent = newContent, Id = contentId };
+
+
+            await contentDocumentRef.SetAsync(updatedContent);
+
+            return true;
+
+
         }
 
         private async Task<bool> IsUserAuthorOfNovel(string userId, string novelId)
@@ -474,7 +474,7 @@ namespace Projekt_I.Services
             return _firestoreDb.Collection("libraries");
         }
 
-        public async Task<bool> SaveUserLibrary(string userId, string novelId, string volumeId, string chapterId, int bookmark)
+        public async Task<bool> SaveUserLibrary(string userId, string novelId, string volumeId, string chapterId, double bookmark)
         {
             try
             {
@@ -549,42 +549,42 @@ namespace Projekt_I.Services
         {
             var novelDocument = _firestoreDb.Collection("novels").Document(novelId);
 
-            if (await IsUserAuthorOfNovel(userId, novelId))
+            if (!(await IsUserAuthorOfNovel(userId, novelId)))
             {
-                var volumesRef = novelDocument.Collection("volumes");
-                var volumesQuery = await volumesRef.GetSnapshotAsync();
+                return false;
+            }
+            var volumesRef = novelDocument.Collection("volumes");
+            var volumesQuery = await volumesRef.GetSnapshotAsync();
 
-                foreach (var volume in volumesQuery.Documents)
+            foreach (var volume in volumesQuery.Documents)
+            {
+                var volumeDocument = volumesRef.Document(volume.Id);
+
+                var chaptersRef = volumeDocument.Collection("chapters");
+                var chaptersQuery = await chaptersRef.GetSnapshotAsync();
+
+                foreach (var chapter in chaptersQuery.Documents)
                 {
-                    var volumeDocument = volumesRef.Document(volume.Id);
+                    var chapterDocument = chaptersRef.Document(chapter.Id);
 
-                    var chaptersRef = volumeDocument.Collection("chapters");
-                    var chaptersQuery = await chaptersRef.GetSnapshotAsync();
+                    var contentRef = chapterDocument.Collection("content");
+                    var contentQuery = await contentRef.GetSnapshotAsync();
 
-                    foreach (var chapter in chaptersQuery.Documents)
+                    foreach (var contentDocument in contentQuery.Documents)
                     {
-                        var chapterDocument = chaptersRef.Document(chapter.Id);
-
-                        var contentRef = chapterDocument.Collection("content");
-                        var contentQuery = await contentRef.GetSnapshotAsync();
-
-                        foreach (var contentDocument in contentQuery.Documents)
-                        {
-                            await contentDocument.Reference.DeleteAsync();
-                        }
-
-                        await chapterDocument.DeleteAsync();
+                        await contentDocument.Reference.DeleteAsync();
                     }
 
-                    await volumeDocument.DeleteAsync();
+                    await chapterDocument.DeleteAsync();
                 }
 
-                await novelDocument.DeleteAsync();
-
-                return true;
+                await volumeDocument.DeleteAsync();
             }
 
-            return false;
+            await novelDocument.DeleteAsync();
+
+            return true;
+
         }
         public async Task<List<Novel>> SearchNovelsByTags(string[] tags)
         {
@@ -863,7 +863,7 @@ namespace Projekt_I.Services
                         {
                             { "readerId", userId },
                             { "novelIds", novelIdsArray },
-                            { "timestamp", FieldValue.ServerTimestamp } 
+                            { "timestamp", FieldValue.ServerTimestamp }
                         }, SetOptions.MergeAll);
 
                         return true;
@@ -885,25 +885,27 @@ namespace Projekt_I.Services
             {
                 var novelDocument = _firestoreDb.Collection("novels").Document(novelId);
 
-                if (await IsUserAuthorOfNovel(userId, novelId))
+                if (!(await IsUserAuthorOfNovel(userId, novelId)))
                 {
-                    var novelSnapshot = await novelDocument.GetSnapshotAsync();
-
-                    if (novelSnapshot.Exists)
-                    {
-                        var existingNovel = novelSnapshot.ConvertTo<Novel>();
-
-                        existingNovel.Title = title;
-                        existingNovel.Description = description;
-                        existingNovel.Tags = tags;
-
-                        await novelDocument.SetAsync(existingNovel);
-
-                        return true;
-                    }
+                    return false;
                 }
+                var novelSnapshot = await novelDocument.GetSnapshotAsync();
 
-                return false;
+                if (!novelSnapshot.Exists)
+                {
+                    return false;
+                }
+                var existingNovel = novelSnapshot.ConvertTo<Novel>();
+
+                existingNovel.Title = title;
+                existingNovel.Description = description;
+                existingNovel.Tags = tags;
+
+                await novelDocument.SetAsync(existingNovel);
+
+                return true;
+
+
             }
             catch (Exception ex)
             {
@@ -918,23 +920,23 @@ namespace Projekt_I.Services
             {
                 var volumeDocument = _firestoreDb.Collection("novels").Document(novelId).Collection("volumes").Document(volumeId);
 
-                if (await IsUserAuthorOfNovel(userId, novelId))
+                if (!(await IsUserAuthorOfNovel(userId, novelId)))
                 {
-                    var volumeSnapshot = await volumeDocument.GetSnapshotAsync();
-
-                    if (volumeSnapshot.Exists)
-                    {
-                        var existingVolume = volumeSnapshot.ConvertTo<Volume>();
-
-                        existingVolume.Title = title;
-
-                        await volumeDocument.SetAsync(existingVolume);
-
-                        return true;
-                    }
+                    return false;
                 }
+                var volumeSnapshot = await volumeDocument.GetSnapshotAsync();
 
-                return false;
+                if (!volumeSnapshot.Exists)
+                {
+                    return false;
+                }
+                var existingVolume = volumeSnapshot.ConvertTo<Volume>();
+
+                existingVolume.Title = title;
+
+                await volumeDocument.SetAsync(existingVolume);
+
+                return true;
             }
             catch (Exception ex)
             {
@@ -949,23 +951,25 @@ namespace Projekt_I.Services
             {
                 var chapterDocument = _firestoreDb.Collection("novels").Document(novelId).Collection("volumes").Document(volumeId).Collection("chapters").Document(chapterId);
 
-                if (await IsUserAuthorOfNovel(userId, novelId))
+                if (!(await IsUserAuthorOfNovel(userId, novelId)))
                 {
-                    var chapterSnapshot = await chapterDocument.GetSnapshotAsync();
-
-                    if (chapterSnapshot.Exists)
-                    {
-                        var existingChapter = chapterSnapshot.ConvertTo<Chapter>();
-
-                        existingChapter.Title = title;
-
-                        await chapterDocument.SetAsync(existingChapter);
-
-                        return true;
-                    }
+                    return false;
                 }
+                var chapterSnapshot = await chapterDocument.GetSnapshotAsync();
 
-                return false;
+                if (!chapterSnapshot.Exists)
+                {
+                    return false;
+                }
+                var existingChapter = chapterSnapshot.ConvertTo<Chapter>();
+
+                existingChapter.Title = title;
+
+                await chapterDocument.SetAsync(existingChapter);
+
+                return true;
+
+
             }
             catch (Exception ex)
             {
