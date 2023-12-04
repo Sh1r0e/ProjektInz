@@ -389,7 +389,7 @@ namespace Projekt_I.Services
 
             var chapterResult = await chaptersCollectionRef.AddAsync(newChapter);
 
-            if (chapterResult != null)
+            if (chapterResult == null)
             {
                 return null;
             }
